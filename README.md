@@ -10,7 +10,7 @@ A Java Swing game where a cat chases a mouse through a maze.
 - Sound effects with volume control
 
 ## Controls
-- Arrow keys: Move
+- WASD: Move
 - R: New round
 - 1–4: Change skins
 - M: Mute
