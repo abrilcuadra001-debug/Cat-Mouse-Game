@@ -28,8 +28,14 @@ public class CatMouseGame extends JPanel {
     private int catX = 60;
     private int catY = MAZE_TOP + 20;
     private final int CAT_SIZE = 35;
-    private final int CAT_SPEED = 10;
+    private final int CAT_SPEED = 4;
     private CatSkin currentSkin = CatSkin.ORANGE;
+
+    // Smooth movement flags
+    private boolean movingUp = false;
+    private boolean movingDown = false;
+    private boolean movingLeft = false;
+    private boolean movingRight = false;
 
     // Mouse
     private int mouseX = 700;
@@ -89,6 +95,7 @@ public class CatMouseGame extends JPanel {
 
         timer = new Timer(30, e -> {
             if (!inStartMenu && !gameOver) {
+                updateCatMovement();
                 moveMouse();
                 checkCatch();
                 checkCheesePickup();
@@ -103,134 +110,118 @@ public class CatMouseGame extends JPanel {
         InputMap im = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
         ActionMap am = getActionMap();
 
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "startGame");
-        am.put("startGame", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                if (inStartMenu) {
-                    startNewRound(true);
-                    inStartMenu = false;
-                    repaint();
-                }
+        bindPress(im, am, KeyEvent.VK_ENTER, "startGame", () -> {
+            if (inStartMenu) {
+                startNewRound(true);
+                inStartMenu = false;
+                repaint();
             }
         });
 
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_LEFT, 0), "moveLeft");
-        am.put("moveLeft", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                moveCat(-CAT_SPEED, 0);
+        // WASD smooth movement
+        bindMovementKey(im, am, KeyEvent.VK_W, "up", () -> movingUp = true, () -> movingUp = false);
+        bindMovementKey(im, am, KeyEvent.VK_A, "left", () -> movingLeft = true, () -> movingLeft = false);
+        bindMovementKey(im, am, KeyEvent.VK_S, "down", () -> movingDown = true, () -> movingDown = false);
+        bindMovementKey(im, am, KeyEvent.VK_D, "right", () -> movingRight = true, () -> movingRight = false);
+
+        bindPress(im, am, KeyEvent.VK_R, "nextRound", () -> {
+            if (gameOver) {
+                startNewRound(false);
+                repaint();
             }
         });
 
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_RIGHT, 0), "moveRight");
-        am.put("moveRight", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                moveCat(CAT_SPEED, 0);
-            }
+        bindPress(im, am, KeyEvent.VK_1, "skin1", () -> {
+            currentSkin = CatSkin.ORANGE;
+            saveProgress();
+            repaint();
         });
 
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_UP, 0), "moveUp");
-        am.put("moveUp", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                moveCat(0, -CAT_SPEED);
-            }
-        });
-
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_DOWN, 0), "moveDown");
-        am.put("moveDown", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                moveCat(0, CAT_SPEED);
-            }
-        });
-
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_R, 0), "nextRound");
-        am.put("nextRound", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                if (gameOver) {
-                    startNewRound(false);
-                    repaint();
-                }
-            }
-        });
-
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_1, 0), "skin1");
-        am.put("skin1", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                currentSkin = CatSkin.ORANGE;
+        bindPress(im, am, KeyEvent.VK_2, "skin2", () -> {
+            if (isSkinUnlocked(CatSkin.BLACK)) {
+                currentSkin = CatSkin.BLACK;
                 saveProgress();
                 repaint();
             }
         });
 
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_2, 0), "skin2");
-        am.put("skin2", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                if (isSkinUnlocked(CatSkin.BLACK)) {
-                    currentSkin = CatSkin.BLACK;
-                    saveProgress();
-                    repaint();
-                }
-            }
-        });
-
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_3, 0), "skin3");
-        am.put("skin3", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                if (isSkinUnlocked(CatSkin.GRAY)) {
-                    currentSkin = CatSkin.GRAY;
-                    saveProgress();
-                    repaint();
-                }
-            }
-        });
-
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_4, 0), "skin4");
-        am.put("skin4", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                if (isSkinUnlocked(CatSkin.WHITE)) {
-                    currentSkin = CatSkin.WHITE;
-                    saveProgress();
-                    repaint();
-                }
-            }
-        });
-
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_M, 0), "mute");
-        am.put("mute", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                muted = !muted;
+        bindPress(im, am, KeyEvent.VK_3, "skin3", () -> {
+            if (isSkinUnlocked(CatSkin.GRAY)) {
+                currentSkin = CatSkin.GRAY;
                 saveProgress();
                 repaint();
             }
         });
 
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_EQUALS, 0), "volUp");
-        am.put("volUp", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                increaseVolume();
+        bindPress(im, am, KeyEvent.VK_4, "skin4", () -> {
+            if (isSkinUnlocked(CatSkin.WHITE)) {
+                currentSkin = CatSkin.WHITE;
+                saveProgress();
                 repaint();
             }
         });
 
-        im.put(KeyStroke.getKeyStroke(KeyEvent.VK_MINUS, 0), "volDown");
-        am.put("volDown", new AbstractAction() {
+        bindPress(im, am, KeyEvent.VK_M, "mute", () -> {
+            muted = !muted;
+            saveProgress();
+            repaint();
+        });
+
+        bindPress(im, am, KeyEvent.VK_EQUALS, "volUp", () -> {
+            increaseVolume();
+            repaint();
+        });
+
+        bindPress(im, am, KeyEvent.VK_MINUS, "volDown", () -> {
+            decreaseVolume();
+            repaint();
+        });
+    }
+
+    private void bindPress(InputMap im, ActionMap am, int keyCode, String actionName, Runnable action) {
+        im.put(KeyStroke.getKeyStroke(keyCode, 0, false), actionName);
+        am.put(actionName, new AbstractAction() {
             @Override
             public void actionPerformed(ActionEvent e) {
-                decreaseVolume();
-                repaint();
+                action.run();
             }
         });
+    }
+
+    private void bindMovementKey(InputMap im, ActionMap am, int keyCode, String name, Runnable pressAction, Runnable releaseAction) {
+        String pressName = name + "Pressed";
+        String releaseName = name + "Released";
+
+        im.put(KeyStroke.getKeyStroke(keyCode, 0, false), pressName);
+        im.put(KeyStroke.getKeyStroke(keyCode, 0, true), releaseName);
+
+        am.put(pressName, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                pressAction.run();
+            }
+        });
+
+        am.put(releaseName, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                releaseAction.run();
+            }
+        });
+    }
+
+    private void updateCatMovement() {
+        int dx = 0;
+        int dy = 0;
+
+        if (movingLeft) dx -= CAT_SPEED;
+        if (movingRight) dx += CAT_SPEED;
+        if (movingUp) dy -= CAT_SPEED;
+        if (movingDown) dy += CAT_SPEED;
+
+        if (dx != 0 || dy != 0) {
+            moveCat(dx, dy);
+        }
     }
 
     private void moveCat(int dx, int dy) {
@@ -238,22 +229,25 @@ public class CatMouseGame extends JPanel {
             return;
         }
 
+        // Move X first
         int nextX = catX + dx;
-        int nextY = catY + dy;
-
         if (nextX < 20) nextX = 20;
-        if (nextY < MAZE_TOP + 20) nextY = MAZE_TOP + 20;
         if (nextX > WIDTH - CAT_SIZE - 20) nextX = WIDTH - CAT_SIZE - 20;
-        if (nextY > HEIGHT - CAT_SIZE - 20) nextY = HEIGHT - CAT_SIZE - 20;
 
-        Rectangle nextCat = new Rectangle(nextX, nextY, CAT_SIZE, CAT_SIZE);
-
-        if (!collidesWithWall(nextCat)) {
+        Rectangle nextCatX = new Rectangle(nextX, catY, CAT_SIZE, CAT_SIZE);
+        if (!collidesWithWall(nextCatX)) {
             catX = nextX;
-            catY = nextY;
         }
 
-        repaint();
+        // Move Y second
+        int nextY = catY + dy;
+        if (nextY < MAZE_TOP + 20) nextY = MAZE_TOP + 20;
+        if (nextY > HEIGHT - CAT_SIZE - 20) nextY = HEIGHT - CAT_SIZE - 20;
+
+        Rectangle nextCatY = new Rectangle(catX, nextY, CAT_SIZE, CAT_SIZE);
+        if (!collidesWithWall(nextCatY)) {
+            catY = nextY;
+        }
     }
 
     private void createMazeWalls() {
@@ -271,13 +265,10 @@ public class CatMouseGame extends JPanel {
         // Horizontal walls
         walls.add(new Rectangle(80, top + 40, 220, t));
         walls.add(new Rectangle(380, top + 40, 280, t));
-
         walls.add(new Rectangle(140, top + 140, 300, t));
         walls.add(new Rectangle(520, top + 140, 180, t));
-
         walls.add(new Rectangle(80, top + 240, 180, t));
         walls.add(new Rectangle(340, top + 240, 300, t));
-
         walls.add(new Rectangle(180, top + 340, 260, t));
         walls.add(new Rectangle(520, top + 340, 180, t));
 
@@ -286,15 +277,12 @@ public class CatMouseGame extends JPanel {
         walls.add(new Rectangle(300, top + 40, t, 140));
         walls.add(new Rectangle(440, top + 140, t, 120));
         walls.add(new Rectangle(700, top + 40, t, 120));
-
         walls.add(new Rectangle(140, top + 140, t, 120));
         walls.add(new Rectangle(260, top + 240, t, 120));
         walls.add(new Rectangle(640, top + 140, t, 120));
-
         walls.add(new Rectangle(80, top + 240, t, 140));
         walls.add(new Rectangle(440, top + 340, t, 120));
         walls.add(new Rectangle(700, top + 340, t, 120));
-
         walls.add(new Rectangle(300, top + 340, t, 120));
         walls.add(new Rectangle(660, top + 440, t, 80));
     }
@@ -307,6 +295,10 @@ public class CatMouseGame extends JPanel {
         roundCheeseCollected = 0;
         timeLeft = 30;
         gameOver = false;
+        movingUp = false;
+        movingDown = false;
+        movingLeft = false;
+        movingRight = false;
         lastSecondTime = System.currentTimeMillis();
 
         respawnMouse();
@@ -531,10 +523,7 @@ public class CatMouseGame extends JPanel {
         g.drawString("3 Gray: " + getSkinStatus(CatSkin.GRAY, GRAY_UNLOCK_SCORE), 340, 105);
         g.drawString("4 White: " + getSkinStatus(CatSkin.WHITE, WHITE_UNLOCK_SCORE), 530, 105);
 
-        g.drawString("Arrow Keys Move   R Next Round   M Mute   +/- Volume", 170, 128);
-
-        // Temporary debug text to confirm movement
-        g.drawString("Cat X: " + catX + "  Cat Y: " + catY, 30, 145);
+        g.drawString("WASD Move   R Next Round   M Mute   +/- Volume", 185, 128);
 
         g.setColor(new Color(90, 60, 35));
         for (Rectangle wall : walls) {
@@ -577,7 +566,7 @@ public class CatMouseGame extends JPanel {
 
         g.setFont(new Font("Arial", Font.PLAIN, 18));
         g.drawString("Controls:", 350, 260);
-        g.drawString("Arrow Keys = Move", 300, 290);
+        g.drawString("WASD = Move", 320, 290);
         g.drawString("1-4 = Change Skin", 300, 320);
         g.drawString("M = Mute / Unmute", 300, 350);
         g.drawString("+ or = = Volume Up", 300, 380);
@@ -719,6 +708,10 @@ public class CatMouseGame extends JPanel {
 
             if (timeLeft <= 0) {
                 gameOver = true;
+                movingUp = false;
+                movingDown = false;
+                movingLeft = false;
+                movingRight = false;
                 saveProgress();
             }
         }
