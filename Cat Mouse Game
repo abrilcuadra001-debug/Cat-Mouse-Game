@@ -15,6 +15,10 @@ public class CatMouseGame extends JPanel {
     private final int WIDTH = 800;
     private final int HEIGHT = 600;
 
+    // Game states
+    private boolean inStartMenu = true;
+    private boolean gameOver = false;
+
     // Cat
     private int catX = 60;
     private int catY = 60;
@@ -39,7 +43,6 @@ public class CatMouseGame extends JPanel {
     private final Random random = new Random();
     private int timeLeft = 30;
     private long lastSecondTime;
-    private boolean gameOver = false;
     private int roundNumber = 1;
 
     // Persistent totals across rounds
@@ -77,11 +80,10 @@ public class CatMouseGame extends JPanel {
 
         createMazeWalls();
         loadProgress();
-        startNewRound(true);
         setupKeyBindings();
 
         timer = new Timer(30, e -> {
-            if (!gameOver) {
+            if (!inStartMenu && !gameOver) {
                 moveMouse();
                 checkCatch();
                 checkCheesePickup();
@@ -95,6 +97,14 @@ public class CatMouseGame extends JPanel {
     private void setupKeyBindings() {
         InputMap im = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
         ActionMap am = getActionMap();
+
+        bindKey(im, am, "ENTER", "startGame", () -> {
+            if (inStartMenu) {
+                startNewRound(true);
+                inStartMenu = false;
+                repaint();
+            }
+        });
 
         bindKey(im, am, "LEFT", "moveLeft", () -> moveCat(-CAT_SPEED, 0));
         bindKey(im, am, "RIGHT", "moveRight", () -> moveCat(CAT_SPEED, 0));
@@ -171,7 +181,7 @@ public class CatMouseGame extends JPanel {
     }
 
     private void moveCat(int dx, int dy) {
-        if (gameOver) {
+        if (inStartMenu || gameOver) {
             return;
         }
 
@@ -199,16 +209,12 @@ public class CatMouseGame extends JPanel {
         // Horizontal walls
         walls.add(new Rectangle(80, 80, 220, t));
         walls.add(new Rectangle(380, 80, 280, t));
-
         walls.add(new Rectangle(140, 180, 300, t));
         walls.add(new Rectangle(520, 180, 180, t));
-
         walls.add(new Rectangle(80, 280, 180, t));
         walls.add(new Rectangle(340, 280, 300, t));
-
         walls.add(new Rectangle(180, 380, 260, t));
         walls.add(new Rectangle(520, 380, 180, t));
-
         walls.add(new Rectangle(80, 480, 220, t));
         walls.add(new Rectangle(380, 480, 280, t));
 
@@ -217,15 +223,12 @@ public class CatMouseGame extends JPanel {
         walls.add(new Rectangle(300, 80, t, 140));
         walls.add(new Rectangle(440, 180, t, 120));
         walls.add(new Rectangle(700, 80, t, 120));
-
         walls.add(new Rectangle(140, 180, t, 120));
         walls.add(new Rectangle(260, 280, t, 120));
         walls.add(new Rectangle(640, 180, t, 120));
-
         walls.add(new Rectangle(80, 280, t, 140));
         walls.add(new Rectangle(440, 380, t, 120));
         walls.add(new Rectangle(700, 380, t, 120));
-
         walls.add(new Rectangle(300, 380, t, 120));
         walls.add(new Rectangle(660, 480, t, 80));
     }
@@ -377,7 +380,6 @@ public class CatMouseGame extends JPanel {
                 FloatControl gainControl = (FloatControl) clip.getControl(FloatControl.Type.MASTER_GAIN);
                 float min = gainControl.getMinimum();
                 float max = gainControl.getMaximum();
-
                 float gain = (volume <= 0.0f) ? min : min + (max - min) * volume;
                 gainControl.setValue(gain);
             }
@@ -413,9 +415,14 @@ public class CatMouseGame extends JPanel {
     protected void paintComponent(Graphics g) {
         super.paintComponent(g);
 
+        if (inStartMenu) {
+            drawStartMenu(g);
+            return;
+        }
+
         g.setColor(Color.BLACK);
         g.setFont(new Font("Arial", Font.BOLD, 22));
-        g.drawString("Cat Chases Mouse - Saved Unlockable Skins", 150, 28);
+        g.drawString("Cat Chases Mouse - Start Menu Version", 170, 28);
 
         g.setFont(new Font("Arial", Font.PLAIN, 16));
         g.drawString("Round: " + roundNumber, 30, 52);
@@ -475,6 +482,32 @@ public class CatMouseGame extends JPanel {
         }
     }
 
+    private void drawStartMenu(Graphics g) {
+        g.setColor(new Color(245, 245, 245));
+        g.fillRect(0, 0, WIDTH, HEIGHT);
+
+        g.setColor(Color.BLACK);
+        g.setFont(new Font("Arial", Font.BOLD, 40));
+        g.drawString("Cat Chases Mouse", 220, 140);
+
+        g.setFont(new Font("Arial", Font.PLAIN, 24));
+        g.drawString("Press ENTER to Start", 275, 200);
+
+        g.setFont(new Font("Arial", Font.PLAIN, 18));
+        g.drawString("Controls:", 350, 260);
+        g.drawString("Arrow Keys = Move", 300, 290);
+        g.drawString("1-4 = Change Skin", 300, 320);
+        g.drawString("M = Mute / Unmute", 300, 350);
+        g.drawString("+ or = = Volume Up", 300, 380);
+        g.drawString("- = Volume Down", 300, 410);
+        g.drawString("R = Next Round after Game Over", 300, 440);
+
+        g.drawString("Unlock Skins with Score:", 290, 500);
+        g.drawString("Black: 100   Gray: 300   White: 500", 245, 530);
+
+        g.drawString("Saved Total Score: " + totalScore, 300, 570);
+    }
+
     private void moveMouse() {
         int nextX = mouseX + mouseDX;
         int nextY = mouseY + mouseDY;
@@ -525,7 +558,6 @@ public class CatMouseGame extends JPanel {
         if (catRect.intersects(mouseRect)) {
             roundMiceCaught++;
             totalMiceCaught++;
-
             roundScore += POINTS_PER_MOUSE;
             totalScore += POINTS_PER_MOUSE;
 
@@ -544,7 +576,6 @@ public class CatMouseGame extends JPanel {
         if (catRect.intersects(cheeseRect)) {
             roundCheeseCollected++;
             totalCheeseCollected++;
-
             roundScore += POINTS_PER_CHEESE;
             totalScore += POINTS_PER_CHEESE;
 
