@@ -13,7 +13,11 @@ public class CatMouseGame extends JPanel {
     }
 
     private final int WIDTH = 800;
-    private final int HEIGHT = 600;
+    private final int HEIGHT = 700;
+
+    // Layout
+    private final int HUD_HEIGHT = 140;
+    private final int MAZE_TOP = HUD_HEIGHT + 20;
 
     // Game states
     private boolean inStartMenu = true;
@@ -21,7 +25,7 @@ public class CatMouseGame extends JPanel {
 
     // Cat
     private int catX = 60;
-    private int catY = 60;
+    private int catY = MAZE_TOP + 20;
     private final int CAT_SIZE = 35;
     private final int CAT_SPEED = 10;
     private CatSkin currentSkin = CatSkin.ORANGE;
@@ -198,44 +202,51 @@ public class CatMouseGame extends JPanel {
     }
 
     private void createMazeWalls() {
-        int t = 20;
+        walls.clear();
 
-        // Outer border
-        walls.add(new Rectangle(0, 0, WIDTH, t));
+        int t = 20;
+        int top = MAZE_TOP;
+
+        // Outer border for maze area only
+        walls.add(new Rectangle(0, top, WIDTH, t));
         walls.add(new Rectangle(0, HEIGHT - t, WIDTH, t));
-        walls.add(new Rectangle(0, 0, t, HEIGHT));
-        walls.add(new Rectangle(WIDTH - t, 0, t, HEIGHT));
+        walls.add(new Rectangle(0, top, t, HEIGHT - top));
+        walls.add(new Rectangle(WIDTH - t, top, t, HEIGHT - top));
 
         // Horizontal walls
-        walls.add(new Rectangle(80, 80, 220, t));
-        walls.add(new Rectangle(380, 80, 280, t));
-        walls.add(new Rectangle(140, 180, 300, t));
-        walls.add(new Rectangle(520, 180, 180, t));
-        walls.add(new Rectangle(80, 280, 180, t));
-        walls.add(new Rectangle(340, 280, 300, t));
-        walls.add(new Rectangle(180, 380, 260, t));
-        walls.add(new Rectangle(520, 380, 180, t));
-        walls.add(new Rectangle(80, 480, 220, t));
-        walls.add(new Rectangle(380, 480, 280, t));
+        walls.add(new Rectangle(80, top + 40, 220, t));
+        walls.add(new Rectangle(380, top + 40, 280, t));
+
+        walls.add(new Rectangle(140, top + 140, 300, t));
+        walls.add(new Rectangle(520, top + 140, 180, t));
+
+        walls.add(new Rectangle(80, top + 240, 180, t));
+        walls.add(new Rectangle(340, top + 240, 300, t));
+
+        walls.add(new Rectangle(180, top + 340, 260, t));
+        walls.add(new Rectangle(520, top + 340, 180, t));
 
         // Vertical walls
-        walls.add(new Rectangle(80, 80, t, 140));
-        walls.add(new Rectangle(300, 80, t, 140));
-        walls.add(new Rectangle(440, 180, t, 120));
-        walls.add(new Rectangle(700, 80, t, 120));
-        walls.add(new Rectangle(140, 180, t, 120));
-        walls.add(new Rectangle(260, 280, t, 120));
-        walls.add(new Rectangle(640, 180, t, 120));
-        walls.add(new Rectangle(80, 280, t, 140));
-        walls.add(new Rectangle(440, 380, t, 120));
-        walls.add(new Rectangle(700, 380, t, 120));
-        walls.add(new Rectangle(300, 380, t, 120));
-        walls.add(new Rectangle(660, 480, t, 80));
+        walls.add(new Rectangle(80, top + 40, t, 140));
+        walls.add(new Rectangle(300, top + 40, t, 140));
+        walls.add(new Rectangle(440, top + 140, t, 120));
+        walls.add(new Rectangle(700, top + 40, t, 120));
+
+        walls.add(new Rectangle(140, top + 140, t, 120));
+        walls.add(new Rectangle(260, top + 240, t, 120));
+        walls.add(new Rectangle(640, top + 140, t, 120));
+
+        walls.add(new Rectangle(80, top + 240, t, 140));
+        walls.add(new Rectangle(440, top + 340, t, 120));
+        walls.add(new Rectangle(700, top + 340, t, 120));
+
+        walls.add(new Rectangle(300, top + 340, t, 120));
+        walls.add(new Rectangle(660, top + 440, t, 80));
     }
 
     private void startNewRound(boolean firstRound) {
         catX = 60;
-        catY = 60;
+        catY = MAZE_TOP + 20;
         roundScore = 0;
         roundMiceCaught = 0;
         roundCheeseCollected = 0;
@@ -288,6 +299,7 @@ public class CatMouseGame extends JPanel {
 
         g.fillOval(catX, catY, CAT_SIZE, CAT_SIZE);
 
+        // Ears
         g.fillPolygon(
                 new int[]{catX + 5, catX + 12, catX + 9},
                 new int[]{catY + 8, catY - 8, catY + 8},
@@ -299,12 +311,38 @@ public class CatMouseGame extends JPanel {
                 3
         );
 
+        // Outline
         g.setColor(Color.BLACK);
         g.drawOval(catX, catY, CAT_SIZE, CAT_SIZE);
 
+        // Eyes
         g.setColor(Color.GREEN);
         g.fillOval(catX + 8, catY + 12, 6, 6);
         g.fillOval(catX + 20, catY + 12, 6, 6);
+    }
+
+    private void drawMouse(Graphics g) {
+        g.setColor(Color.GRAY);
+        g.fillOval(mouseX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
+        g.setColor(Color.BLACK);
+        g.drawOval(mouseX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
+        g.fillOval(mouseX + 4, mouseY + 4, 6, 6);
+        g.fillOval(mouseX + 14, mouseY + 4, 6, 6);
+        g.fillOval(mouseX + 6, mouseY + 12, 3, 3);
+        g.drawArc(mouseX + MOUSE_SIZE - 2, mouseY + 8, 18, 18, 270, 180);
+    }
+
+    private void drawCheese(Graphics g) {
+        g.setColor(Color.YELLOW);
+        g.fillOval(cheeseX, cheeseY, CHEESE_SIZE, CHEESE_SIZE);
+
+        g.setColor(new Color(230, 190, 0));
+        g.fillOval(cheeseX + 4, cheeseY + 4, 4, 4);
+        g.fillOval(cheeseX + 11, cheeseY + 6, 5, 5);
+        g.fillOval(cheeseX + 7, cheeseY + 12, 4, 4);
+
+        g.setColor(Color.ORANGE);
+        g.drawOval(cheeseX, cheeseY, CHEESE_SIZE, CHEESE_SIZE);
     }
 
     private void saveProgress() {
@@ -420,48 +458,39 @@ public class CatMouseGame extends JPanel {
             return;
         }
 
+        // HUD
         g.setColor(Color.BLACK);
         g.setFont(new Font("Arial", Font.BOLD, 22));
-        g.drawString("Cat Chases Mouse - Start Menu Version", 170, 28);
+        g.drawString("Cat Chases Mouse", 280, 30);
 
         g.setFont(new Font("Arial", Font.PLAIN, 16));
-        g.drawString("Round: " + roundNumber, 30, 52);
-        g.drawString("Round Score: " + roundScore, 130, 52);
-        g.drawString("Round Mice: " + roundMiceCaught, 280, 52);
-        g.drawString("Time Left: " + timeLeft, 420, 52);
-        g.drawString("Total Score: " + totalScore, 560, 52);
+        g.drawString("Round: " + roundNumber, 30, 55);
+        g.drawString("Round Score: " + roundScore, 140, 55);
+        g.drawString("Round Mice: " + roundMiceCaught, 300, 55);
+        g.drawString("Time Left: " + timeLeft, 460, 55);
+        g.drawString("Total Score: " + totalScore, 610, 55);
 
-        g.drawString("Total Mice: " + totalMiceCaught, 30, 74);
-        g.drawString("Total Cheese: " + totalCheeseCollected, 170, 74);
-        g.drawString("Current Skin: " + currentSkin, 350, 74);
+        g.drawString("Total Mice: " + totalMiceCaught, 30, 80);
+        g.drawString("Total Cheese: " + totalCheeseCollected, 170, 80);
+        g.drawString("Skin: " + currentSkin, 360, 80);
+        g.drawString("Volume: " + getVolumeText(), 560, 80);
 
-        g.drawString("Volume: " + getVolumeText(), 560, 74);
-        g.drawString("+/= volume   - lower   M mute", 500, 96);
+        g.drawString("1 Orange", 30, 105);
+        g.drawString("2 Black: " + getSkinStatus(CatSkin.BLACK, BLACK_UNLOCK_SCORE), 130, 105);
+        g.drawString("3 Gray: " + getSkinStatus(CatSkin.GRAY, GRAY_UNLOCK_SCORE), 340, 105);
+        g.drawString("4 White: " + getSkinStatus(CatSkin.WHITE, WHITE_UNLOCK_SCORE), 530, 105);
 
-        g.drawString("1 Orange: Unlocked", 30, 96);
-        g.drawString("2 Black: " + getSkinStatus(CatSkin.BLACK, BLACK_UNLOCK_SCORE), 180, 96);
-        g.drawString("3 Gray: " + getSkinStatus(CatSkin.GRAY, GRAY_UNLOCK_SCORE), 390, 96);
-        g.drawString("4 White: " + getSkinStatus(CatSkin.WHITE, WHITE_UNLOCK_SCORE), 570, 118);
+        g.drawString("Arrow Keys Move   R Next Round   M Mute   +/- Volume", 170, 128);
 
+        // Maze
         g.setColor(new Color(90, 60, 35));
         for (Rectangle wall : walls) {
             g.fillRect(wall.x, wall.y, wall.width, wall.height);
         }
 
-        g.setColor(Color.YELLOW);
-        g.fillOval(cheeseX, cheeseY, CHEESE_SIZE, CHEESE_SIZE);
-
-        g.setColor(new Color(230, 190, 0));
-        g.fillOval(cheeseX + 4, cheeseY + 4, 4, 4);
-        g.fillOval(cheeseX + 11, cheeseY + 6, 5, 5);
-        g.fillOval(cheeseX + 7, cheeseY + 12, 4, 4);
-
+        drawCheese(g);
         drawCat(g);
-
-        g.setColor(Color.GRAY);
-        g.fillOval(mouseX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
-        g.setColor(Color.BLACK);
-        g.drawArc(mouseX + MOUSE_SIZE - 2, mouseY + 8, 18, 18, 270, 180);
+        drawMouse(g);
 
         if (gameOver) {
             g.setColor(new Color(0, 0, 0, 185));
@@ -469,16 +498,16 @@ public class CatMouseGame extends JPanel {
 
             g.setColor(Color.WHITE);
             g.setFont(new Font("Arial", Font.BOLD, 38));
-            g.drawString("Round Over!", 280, 220);
+            g.drawString("Round Over!", 270, 250);
 
             g.setFont(new Font("Arial", Font.PLAIN, 24));
-            g.drawString("Round Score: " + roundScore, 300, 265);
-            g.drawString("Round Mice Caught: " + roundMiceCaught, 260, 300);
-            g.drawString("Total Score: " + totalScore, 300, 335);
-            g.drawString("Total Mice Caught: " + totalMiceCaught, 255, 370);
+            g.drawString("Round Score: " + roundScore, 290, 300);
+            g.drawString("Round Mice Caught: " + roundMiceCaught, 250, 335);
+            g.drawString("Total Score: " + totalScore, 290, 370);
+            g.drawString("Total Mice Caught: " + totalMiceCaught, 245, 405);
 
-            g.drawString("Press R for next round", 255, 420);
-            g.drawString("Close window to quit", 275, 455);
+            g.drawString("Press R for next round", 245, 455);
+            g.drawString("Close window to quit", 265, 490);
         }
     }
 
@@ -591,7 +620,7 @@ public class CatMouseGame extends JPanel {
 
         while (!valid) {
             mouseX = 40 + random.nextInt(WIDTH - 80 - MOUSE_SIZE);
-            mouseY = 40 + random.nextInt(HEIGHT - 80 - MOUSE_SIZE);
+            mouseY = MAZE_TOP + 20 + random.nextInt(HEIGHT - MAZE_TOP - 60 - MOUSE_SIZE);
 
             Rectangle mouseRect = new Rectangle(mouseX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
             Rectangle catRect = new Rectangle(catX, catY, CAT_SIZE, CAT_SIZE);
@@ -608,7 +637,7 @@ public class CatMouseGame extends JPanel {
 
         while (!valid) {
             cheeseX = 40 + random.nextInt(WIDTH - 80 - CHEESE_SIZE);
-            cheeseY = 40 + random.nextInt(HEIGHT - 80 - CHEESE_SIZE);
+            cheeseY = MAZE_TOP + 20 + random.nextInt(HEIGHT - MAZE_TOP - 60 - CHEESE_SIZE);
 
             Rectangle cheeseRect = new Rectangle(cheeseX, cheeseY, CHEESE_SIZE, CHEESE_SIZE);
             Rectangle catRect = new Rectangle(catX, catY, CAT_SIZE, CAT_SIZE);
