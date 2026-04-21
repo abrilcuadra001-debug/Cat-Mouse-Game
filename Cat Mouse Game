@@ -1,12 +1,12 @@
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.ActionEvent;
+import java.awt.event.*;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.Random;
 import javax.sound.sampled.*;
 
-public class CatMouseGame extends JPanel {
+public class CatMouseGame extends JFrame implements KeyListener, MouseListener {
 
     enum CatSkin {
         ORANGE, BLACK, GRAY, WHITE
@@ -15,52 +15,48 @@ public class CatMouseGame extends JPanel {
     private final int WIDTH = 800;
     private final int HEIGHT = 700;
 
-    // Layout
     private final int HUD_HEIGHT = 140;
     private final int MAZE_TOP = HUD_HEIGHT + 20;
 
-    // Game states
     private boolean inStartMenu = true;
     private boolean gameOver = false;
 
     // Cat
-    private int catX = 60;
-    private int catY = MAZE_TOP + 20;
+    private int catX = 30;
+    private int catY = MAZE_TOP + 25;
     private final int CAT_SIZE = 35;
-    private final int CAT_SPEED = 4;
+    private final int CAT_SPEED = 6;
     private CatSkin currentSkin = CatSkin.ORANGE;
 
-    // Smooth movement flags
-    private boolean movingUp = false;
-    private boolean movingDown = false;
-    private boolean movingLeft = false;
-    private boolean movingRight = false;
+    // Hold-to-move flags
+    private boolean moveUp = false;
+    private boolean moveDown = false;
+    private boolean moveLeft = false;
+    private boolean moveRight = false;
 
     // Mouse
-    private int mouseX = 700;
-    private int mouseY = 500;
+    private int mouseX = 650;
+    private int mouseY = MAZE_TOP + 250;
     private final int MOUSE_SIZE = 25;
     private int mouseDX = 4;
     private int mouseDY = 4;
 
     // Cheese
-    private int cheeseX;
-    private int cheeseY;
-    private final int CHEESE_SIZE = 20;
+    private int cheeseX = 300;
+    private int cheeseY = MAZE_TOP + 200;
+    private final int CHEESE_SIZE = 18;
 
-    // Game timing/state
+    // Timing
     private Timer timer;
-    private final Random random = new Random();
-    private int timeLeft = 30;
     private long lastSecondTime;
+    private int timeLeft = 30;
     private int roundNumber = 1;
 
-    // Persistent totals across rounds
+    // Scores
     private int totalScore = 0;
     private int totalMiceCaught = 0;
     private int totalCheeseCollected = 0;
 
-    // Current round stats
     private int roundScore = 0;
     private int roundMiceCaught = 0;
     private int roundCheeseCollected = 0;
@@ -68,28 +64,40 @@ public class CatMouseGame extends JPanel {
     private final int POINTS_PER_MOUSE = 5;
     private final int POINTS_PER_CHEESE = 3;
 
-    // Unlock scores
+    // Unlocks
     private final int BLACK_UNLOCK_SCORE = 100;
     private final int GRAY_UNLOCK_SCORE = 300;
     private final int WHITE_UNLOCK_SCORE = 500;
 
-    // Save file
+    // Save
     private final String SAVE_FILE = "saveData.txt";
 
-    // Sound settings
+    // Sound
     private float volume = 0.8f;
     private boolean muted = false;
 
-    // Maze walls
+    // Maze
     private final ArrayList<Rectangle> walls = new ArrayList<>();
+    private final Random rand = new Random();
+
+    private final GamePanel gamePanel = new GamePanel();
 
     public CatMouseGame() {
-        setPreferredSize(new Dimension(WIDTH, HEIGHT));
-        setBackground(Color.WHITE);
-        setFocusable(true);
+        super("Cat Mouse Game");
 
-        createMazeWalls();
+        createWalls();
         loadProgress();
+
+        setContentPane(gamePanel);
+        gamePanel.setPreferredSize(new Dimension(WIDTH, HEIGHT));
+        gamePanel.setBackground(Color.WHITE);
+
+        addKeyListener(this);
+        addMouseListener(this);
+        gamePanel.addMouseListener(this);
+
+        setFocusable(true);
+        setFocusTraversalKeysEnabled(false);
 
         timer = new Timer(30, e -> {
             if (!inStartMenu && !gameOver) {
@@ -99,114 +107,174 @@ public class CatMouseGame extends JPanel {
                 checkCheesePickup();
                 updateTimer();
             }
-            repaint();
+            gamePanel.repaint();
         });
+
+        pack();
+        setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        setLocationRelativeTo(null);
+        setResizable(false);
+        setVisible(true);
+
         timer.start();
+
+        SwingUtilities.invokeLater(() -> {
+            toFront();
+            requestFocus();
+        });
     }
 
-    private void setupWindowKeyBindings(JRootPane rootPane) {
-        InputMap inputMap = rootPane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
-        ActionMap actionMap = rootPane.getActionMap();
+    private class GamePanel extends JPanel {
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
 
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("ENTER"), "startGame", () -> {
             if (inStartMenu) {
-                startNewRound(true);
-                inStartMenu = false;
-                repaint();
+                drawStartMenu(g);
+                return;
             }
-        });
 
-        // WASD pressed
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("pressed W"), "pressW", () -> movingUp = true);
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("pressed A"), "pressA", () -> movingLeft = true);
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("pressed S"), "pressS", () -> movingDown = true);
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("pressed D"), "pressD", () -> movingRight = true);
+            g.setColor(Color.BLACK);
+            g.setFont(new Font("Arial", Font.BOLD, 22));
+            g.drawString("Cat Chases Mouse", 280, 30);
 
-        // WASD released
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("released W"), "releaseW", () -> movingUp = false);
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("released A"), "releaseA", () -> movingLeft = false);
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("released S"), "releaseS", () -> movingDown = false);
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("released D"), "releaseD", () -> movingRight = false);
+            g.setFont(new Font("Arial", Font.PLAIN, 16));
+            g.drawString("Round: " + roundNumber, 30, 55);
+            g.drawString("Round Score: " + roundScore, 140, 55);
+            g.drawString("Round Mice: " + roundMiceCaught, 300, 55);
+            g.drawString("Time Left: " + timeLeft, 460, 55);
+            g.drawString("Total Score: " + totalScore, 610, 55);
 
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("R"), "nextRound", () -> {
+            g.drawString("Total Mice: " + totalMiceCaught, 30, 80);
+            g.drawString("Total Cheese: " + totalCheeseCollected, 170, 80);
+            g.drawString("Skin: " + currentSkin, 360, 80);
+            g.drawString("Volume: " + getVolumeText(), 560, 80);
+
+            g.drawString("1 Orange", 30, 105);
+            g.drawString("2 Black: " + getSkinStatus(CatSkin.BLACK, BLACK_UNLOCK_SCORE), 130, 105);
+            g.drawString("3 Gray: " + getSkinStatus(CatSkin.GRAY, GRAY_UNLOCK_SCORE), 340, 105);
+            g.drawString("4 White: " + getSkinStatus(CatSkin.WHITE, WHITE_UNLOCK_SCORE), 530, 105);
+
+            g.drawString("Hold WASD to Move   R Next Round   M Mute   +/- Volume", 145, 128);
+
+            g.setColor(new Color(90, 60, 35));
+            for (Rectangle wall : walls) {
+                g.fillRect(wall.x, wall.y, wall.width, wall.height);
+            }
+
+            drawCheese(g);
+            drawCat(g);
+            drawMouse(g);
+
             if (gameOver) {
-                startNewRound(false);
-                repaint();
+                drawGameOverOverlay(g);
             }
-        });
-
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("1"), "skin1", () -> {
-            currentSkin = CatSkin.ORANGE;
-            saveProgress();
-            repaint();
-        });
-
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("2"), "skin2", () -> {
-            if (isSkinUnlocked(CatSkin.BLACK)) {
-                currentSkin = CatSkin.BLACK;
-                saveProgress();
-                repaint();
-            }
-        });
-
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("3"), "skin3", () -> {
-            if (isSkinUnlocked(CatSkin.GRAY)) {
-                currentSkin = CatSkin.GRAY;
-                saveProgress();
-                repaint();
-            }
-        });
-
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("4"), "skin4", () -> {
-            if (isSkinUnlocked(CatSkin.WHITE)) {
-                currentSkin = CatSkin.WHITE;
-                saveProgress();
-                repaint();
-            }
-        });
-
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("M"), "mute", () -> {
-            muted = !muted;
-            saveProgress();
-            repaint();
-        });
-
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("EQUALS"), "volUp", () -> {
-            increaseVolume();
-            repaint();
-        });
-
-        bindKey(inputMap, actionMap, KeyStroke.getKeyStroke("MINUS"), "volDown", () -> {
-            decreaseVolume();
-            repaint();
-        });
+        }
     }
 
-    private void bindKey(InputMap inputMap, ActionMap actionMap, KeyStroke keyStroke, String name, Runnable action) {
-        inputMap.put(keyStroke, name);
-        actionMap.put(name, new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                action.run();
-            }
-        });
+    private void drawGameOverOverlay(Graphics g) {
+        Graphics2D g2 = (Graphics2D) g.create();
+
+        g2.setColor(new Color(0, 0, 0, 170));
+        g2.fillRect(0, 0, WIDTH, HEIGHT);
+
+        int boxW = 380;
+        int boxH = 220;
+        int boxX = (WIDTH - boxW) / 2;
+        int boxY = (HEIGHT - boxH) / 2;
+
+        g2.setColor(new Color(245, 245, 245));
+        g2.fillRoundRect(boxX, boxY, boxW, boxH, 30, 30);
+
+        g2.setColor(Color.DARK_GRAY);
+        g2.setStroke(new BasicStroke(3f));
+        g2.drawRoundRect(boxX, boxY, boxW, boxH, 30, 30);
+
+        g2.setColor(Color.BLACK);
+        g2.setFont(new Font("Arial", Font.BOLD, 34));
+        g2.drawString("Round Over!", boxX + 85, boxY + 50);
+
+        g2.setFont(new Font("Arial", Font.PLAIN, 22));
+        g2.drawString("Round Score: " + roundScore, boxX + 90, boxY + 95);
+        g2.drawString("Mice Caught: " + roundMiceCaught, boxX + 90, boxY + 125);
+        g2.drawString("Total Score: " + totalScore, boxX + 90, boxY + 155);
+
+        g2.setFont(new Font("Arial", Font.BOLD, 20));
+        g2.drawString("Press R for next round", boxX + 90, boxY + 190);
+
+        g2.dispose();
+    }
+
+    private void createWalls() {
+        walls.clear();
+
+        int t = 20;
+        int top = MAZE_TOP;
+
+        walls.add(new Rectangle(0, top, WIDTH, t));
+        walls.add(new Rectangle(0, HEIGHT - t, WIDTH, t));
+        walls.add(new Rectangle(0, top, t, HEIGHT - top));
+        walls.add(new Rectangle(WIDTH - t, top, t, HEIGHT - top));
+
+        walls.add(new Rectangle(80, top + 40, 220, t));
+        walls.add(new Rectangle(380, top + 40, 280, t));
+        walls.add(new Rectangle(140, top + 140, 300, t));
+        walls.add(new Rectangle(520, top + 140, 180, t));
+        walls.add(new Rectangle(80, top + 240, 180, t));
+        walls.add(new Rectangle(340, top + 240, 300, t));
+        walls.add(new Rectangle(180, top + 340, 260, t));
+        walls.add(new Rectangle(520, top + 340, 180, t));
+
+        walls.add(new Rectangle(80, top + 40, t, 140));
+        walls.add(new Rectangle(300, top + 40, t, 140));
+        walls.add(new Rectangle(440, top + 140, t, 120));
+        walls.add(new Rectangle(700, top + 40, t, 120));
+        walls.add(new Rectangle(140, top + 140, t, 120));
+        walls.add(new Rectangle(260, top + 240, t, 120));
+        walls.add(new Rectangle(640, top + 140, t, 120));
+        walls.add(new Rectangle(80, top + 240, t, 140));
+        walls.add(new Rectangle(440, top + 340, t, 120));
+        walls.add(new Rectangle(700, top + 340, t, 120));
+        walls.add(new Rectangle(300, top + 340, t, 120));
+        walls.add(new Rectangle(660, top + 440, t, 60));
+    }
+
+    private void startNewRound(boolean firstRound) {
+        catX = 30;
+        catY = MAZE_TOP + 25;
+
+        roundScore = 0;
+        roundMiceCaught = 0;
+        roundCheeseCollected = 0;
+
+        timeLeft = 30;
+        gameOver = false;
+        clearMovement();
+        lastSecondTime = System.currentTimeMillis();
+
+        respawnMouse();
+        respawnCheese();
+
+        if (!firstRound) {
+            roundNumber++;
+        }
     }
 
     private void clearMovement() {
-        movingUp = false;
-        movingDown = false;
-        movingLeft = false;
-        movingRight = false;
+        moveUp = false;
+        moveDown = false;
+        moveLeft = false;
+        moveRight = false;
     }
 
     private void updateCatMovement() {
         int dx = 0;
         int dy = 0;
 
-        if (movingLeft) dx -= CAT_SPEED;
-        if (movingRight) dx += CAT_SPEED;
-        if (movingUp) dy -= CAT_SPEED;
-        if (movingDown) dy += CAT_SPEED;
+        if (moveLeft) dx -= CAT_SPEED;
+        if (moveRight) dx += CAT_SPEED;
+        if (moveUp) dy -= CAT_SPEED;
+        if (moveDown) dy += CAT_SPEED;
 
         if (dx != 0 || dy != 0) {
             moveCat(dx, dy);
@@ -214,9 +282,7 @@ public class CatMouseGame extends JPanel {
     }
 
     private void moveCat(int dx, int dy) {
-        if (inStartMenu || gameOver) {
-            return;
-        }
+        if (inStartMenu || gameOver) return;
 
         int nextX = catX + dx;
         if (nextX < 20) nextX = 20;
@@ -237,140 +303,125 @@ public class CatMouseGame extends JPanel {
         }
     }
 
-    private void createMazeWalls() {
-        walls.clear();
-
-        int t = 20;
-        int top = MAZE_TOP;
-
-        // Outer border for maze area only
-        walls.add(new Rectangle(0, top, WIDTH, t));
-        walls.add(new Rectangle(0, HEIGHT - t, WIDTH, t));
-        walls.add(new Rectangle(0, top, t, HEIGHT - top));
-        walls.add(new Rectangle(WIDTH - t, top, t, HEIGHT - top));
-
-        // Horizontal walls
-        walls.add(new Rectangle(80, top + 40, 220, t));
-        walls.add(new Rectangle(380, top + 40, 280, t));
-        walls.add(new Rectangle(140, top + 140, 300, t));
-        walls.add(new Rectangle(520, top + 140, 180, t));
-        walls.add(new Rectangle(80, top + 240, 180, t));
-        walls.add(new Rectangle(340, top + 240, 300, t));
-        walls.add(new Rectangle(180, top + 340, 260, t));
-        walls.add(new Rectangle(520, top + 340, 180, t));
-
-        // Vertical walls
-        walls.add(new Rectangle(80, top + 40, t, 140));
-        walls.add(new Rectangle(300, top + 40, t, 140));
-        walls.add(new Rectangle(440, top + 140, t, 120));
-        walls.add(new Rectangle(700, top + 40, t, 120));
-        walls.add(new Rectangle(140, top + 140, t, 120));
-        walls.add(new Rectangle(260, top + 240, t, 120));
-        walls.add(new Rectangle(640, top + 140, t, 120));
-        walls.add(new Rectangle(80, top + 240, t, 140));
-        walls.add(new Rectangle(440, top + 340, t, 120));
-        walls.add(new Rectangle(700, top + 340, t, 120));
-        walls.add(new Rectangle(300, top + 340, t, 120));
-        walls.add(new Rectangle(660, top + 440, t, 80));
+    private boolean collidesWithWall(Rectangle r) {
+        for (Rectangle wall : walls) {
+            if (r.intersects(wall)) return true;
+        }
+        return false;
     }
 
-    private void startNewRound(boolean firstRound) {
-        catX = 60;
-        catY = MAZE_TOP + 20;
-        roundScore = 0;
-        roundMiceCaught = 0;
-        roundCheeseCollected = 0;
-        timeLeft = 30;
-        gameOver = false;
-        clearMovement();
-        lastSecondTime = System.currentTimeMillis();
+    private void moveMouse() {
+        int nextX = mouseX + mouseDX;
+        int nextY = mouseY + mouseDY;
 
-        respawnMouse();
-        respawnCheese();
+        Rectangle nextMouseX = new Rectangle(nextX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
+        Rectangle nextMouseY = new Rectangle(mouseX, nextY, MOUSE_SIZE, MOUSE_SIZE);
 
-        if (!firstRound) {
-            roundNumber++;
+        boolean hitX = false;
+        boolean hitY = false;
+
+        for (Rectangle wall : walls) {
+            if (nextMouseX.intersects(wall)) hitX = true;
+            if (nextMouseY.intersects(wall)) hitY = true;
+        }
+
+        if (hitX) mouseDX *= -1;
+        else mouseX += mouseDX;
+
+        if (hitY) mouseDY *= -1;
+        else mouseY += mouseDY;
+    }
+
+    private void checkCatch() {
+        Rectangle cat = new Rectangle(catX, catY, CAT_SIZE, CAT_SIZE);
+        Rectangle mouse = new Rectangle(mouseX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
+
+        if (cat.intersects(mouse)) {
+            roundMiceCaught++;
+            totalMiceCaught++;
+            roundScore += POINTS_PER_MOUSE;
+            totalScore += POINTS_PER_MOUSE;
+
+            playSound("sounds/meow.wav");
+            playSound("sounds/squeak.wav");
+
+            saveProgress();
+            respawnMouse();
+        }
+    }
+
+    private void checkCheesePickup() {
+        Rectangle cat = new Rectangle(catX, catY, CAT_SIZE, CAT_SIZE);
+        Rectangle cheese = new Rectangle(cheeseX, cheeseY, CHEESE_SIZE, CHEESE_SIZE);
+
+        if (cat.intersects(cheese)) {
+            roundCheeseCollected++;
+            totalCheeseCollected++;
+            roundScore += POINTS_PER_CHEESE;
+            totalScore += POINTS_PER_CHEESE;
+
+            playSound("sounds/cheese.wav");
+
+            saveProgress();
+            respawnCheese();
+        }
+    }
+
+    private void respawnMouse() {
+        boolean valid = false;
+
+        while (!valid) {
+            mouseX = 40 + rand.nextInt(WIDTH - 100 - MOUSE_SIZE);
+            mouseY = MAZE_TOP + 20 + rand.nextInt(HEIGHT - MAZE_TOP - 100 - MOUSE_SIZE);
+
+            Rectangle mouse = new Rectangle(mouseX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
+            Rectangle cat = new Rectangle(catX, catY, CAT_SIZE, CAT_SIZE);
+
+            valid = !collidesWithWall(mouse) && !mouse.intersects(cat);
+        }
+    }
+
+    private void respawnCheese() {
+        boolean valid = false;
+
+        while (!valid) {
+            cheeseX = 40 + rand.nextInt(WIDTH - 100 - CHEESE_SIZE);
+            cheeseY = MAZE_TOP + 20 + rand.nextInt(HEIGHT - MAZE_TOP - 100 - CHEESE_SIZE);
+
+            Rectangle cheese = new Rectangle(cheeseX, cheeseY, CHEESE_SIZE, CHEESE_SIZE);
+            Rectangle cat = new Rectangle(catX, catY, CAT_SIZE, CAT_SIZE);
+            Rectangle mouse = new Rectangle(mouseX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
+
+            valid = !collidesWithWall(cheese) && !cheese.intersects(cat) && !cheese.intersects(mouse);
+        }
+    }
+
+    private void updateTimer() {
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - lastSecondTime >= 1000) {
+            timeLeft--;
+            lastSecondTime = currentTime;
+
+            if (timeLeft <= 0) {
+                gameOver = true;
+                clearMovement();
+                saveProgress();
+            }
         }
     }
 
     private boolean isSkinUnlocked(CatSkin skin) {
         switch (skin) {
-            case ORANGE:
-                return true;
-            case BLACK:
-                return totalScore >= BLACK_UNLOCK_SCORE;
-            case GRAY:
-                return totalScore >= GRAY_UNLOCK_SCORE;
-            case WHITE:
-                return totalScore >= WHITE_UNLOCK_SCORE;
-            default:
-                return false;
+            case ORANGE: return true;
+            case BLACK: return totalScore >= BLACK_UNLOCK_SCORE;
+            case GRAY: return totalScore >= GRAY_UNLOCK_SCORE;
+            case WHITE: return totalScore >= WHITE_UNLOCK_SCORE;
+            default: return false;
         }
     }
 
     private String getSkinStatus(CatSkin skin, int unlockScore) {
         return isSkinUnlocked(skin) ? "Unlocked" : "Locked (" + unlockScore + ")";
-    }
-
-    private void drawCat(Graphics g) {
-        switch (currentSkin) {
-            case ORANGE:
-                g.setColor(Color.ORANGE);
-                break;
-            case BLACK:
-                g.setColor(Color.BLACK);
-                break;
-            case GRAY:
-                g.setColor(Color.GRAY);
-                break;
-            case WHITE:
-                g.setColor(Color.WHITE);
-                break;
-        }
-
-        g.fillOval(catX, catY, CAT_SIZE, CAT_SIZE);
-
-        g.fillPolygon(
-                new int[]{catX + 5, catX + 12, catX + 9},
-                new int[]{catY + 8, catY - 8, catY + 8},
-                3
-        );
-        g.fillPolygon(
-                new int[]{catX + 23, catX + 30, catX + 26},
-                new int[]{catY + 8, catY - 8, catY + 8},
-                3
-        );
-
-        g.setColor(Color.BLACK);
-        g.drawOval(catX, catY, CAT_SIZE, CAT_SIZE);
-
-        g.setColor(Color.GREEN);
-        g.fillOval(catX + 8, catY + 12, 6, 6);
-        g.fillOval(catX + 20, catY + 12, 6, 6);
-    }
-
-    private void drawMouse(Graphics g) {
-        g.setColor(Color.GRAY);
-        g.fillOval(mouseX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
-        g.setColor(Color.BLACK);
-        g.drawOval(mouseX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
-        g.fillOval(mouseX + 4, mouseY + 4, 6, 6);
-        g.fillOval(mouseX + 14, mouseY + 4, 6, 6);
-        g.fillOval(mouseX + 6, mouseY + 12, 3, 3);
-        g.drawArc(mouseX + MOUSE_SIZE - 2, mouseY + 8, 18, 18, 270, 180);
-    }
-
-    private void drawCheese(Graphics g) {
-        g.setColor(Color.YELLOW);
-        g.fillOval(cheeseX, cheeseY, CHEESE_SIZE, CHEESE_SIZE);
-
-        g.setColor(new Color(230, 190, 0));
-        g.fillOval(cheeseX + 4, cheeseY + 4, 4, 4);
-        g.fillOval(cheeseX + 11, cheeseY + 6, 5, 5);
-        g.fillOval(cheeseX + 7, cheeseY + 12, 4, 4);
-
-        g.setColor(Color.ORANGE);
-        g.drawOval(cheeseX, cheeseY, CHEESE_SIZE, CHEESE_SIZE);
     }
 
     private void saveProgress() {
@@ -388,9 +439,7 @@ public class CatMouseGame extends JPanel {
 
     private void loadProgress() {
         File file = new File(SAVE_FILE);
-        if (!file.exists()) {
-            return;
-        }
+        if (!file.exists()) return;
 
         try (BufferedReader reader = new BufferedReader(new FileReader(file))) {
             totalScore = Integer.parseInt(reader.readLine());
@@ -420,7 +469,7 @@ public class CatMouseGame extends JPanel {
                 muted = Boolean.parseBoolean(savedMuted);
             }
 
-        } catch (IOException | NumberFormatException e) {
+        } catch (Exception e) {
             totalScore = 0;
             totalMiceCaught = 0;
             totalCheeseCollected = 0;
@@ -431,9 +480,7 @@ public class CatMouseGame extends JPanel {
     }
 
     private void playSound(String fileName) {
-        if (muted) {
-            return;
-        }
+        if (muted) return;
 
         try {
             AudioInputStream audio = AudioSystem.getAudioInputStream(new File(fileName));
@@ -470,69 +517,35 @@ public class CatMouseGame extends JPanel {
         return muted ? "Muted" : (int) (volume * 100) + "%";
     }
 
-    @Override
-    protected void paintComponent(Graphics g) {
-        super.paintComponent(g);
-
-        if (inStartMenu) {
-            drawStartMenu(g);
-            return;
+    private void drawCat(Graphics g) {
+        switch (currentSkin) {
+            case ORANGE: g.setColor(Color.ORANGE); break;
+            case BLACK: g.setColor(Color.BLACK); break;
+            case GRAY: g.setColor(Color.GRAY); break;
+            case WHITE: g.setColor(Color.WHITE); break;
         }
 
+        g.fillOval(catX, catY, CAT_SIZE, CAT_SIZE);
         g.setColor(Color.BLACK);
-        g.setFont(new Font("Arial", Font.BOLD, 22));
-        g.drawString("Cat Chases Mouse", 280, 30);
+        g.drawOval(catX, catY, CAT_SIZE, CAT_SIZE);
+    }
 
-        g.setFont(new Font("Arial", Font.PLAIN, 16));
-        g.drawString("Round: " + roundNumber, 30, 55);
-        g.drawString("Round Score: " + roundScore, 140, 55);
-        g.drawString("Round Mice: " + roundMiceCaught, 300, 55);
-        g.drawString("Time Left: " + timeLeft, 460, 55);
-        g.drawString("Total Score: " + totalScore, 610, 55);
+    private void drawMouse(Graphics g) {
+        g.setColor(Color.GRAY);
+        g.fillOval(mouseX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
+        g.setColor(Color.BLACK);
+        g.drawOval(mouseX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
+    }
 
-        g.drawString("Total Mice: " + totalMiceCaught, 30, 80);
-        g.drawString("Total Cheese: " + totalCheeseCollected, 170, 80);
-        g.drawString("Skin: " + currentSkin, 360, 80);
-        g.drawString("Volume: " + getVolumeText(), 560, 80);
-
-        g.drawString("1 Orange", 30, 105);
-        g.drawString("2 Black: " + getSkinStatus(CatSkin.BLACK, BLACK_UNLOCK_SCORE), 130, 105);
-        g.drawString("3 Gray: " + getSkinStatus(CatSkin.GRAY, GRAY_UNLOCK_SCORE), 340, 105);
-        g.drawString("4 White: " + getSkinStatus(CatSkin.WHITE, WHITE_UNLOCK_SCORE), 530, 105);
-
-        g.drawString("WASD Move   R Next Round   M Mute   +/- Volume", 185, 128);
-        g.drawString("Cat X: " + catX + "  Cat Y: " + catY, 30, 145);
-
-        g.setColor(new Color(90, 60, 35));
-        for (Rectangle wall : walls) {
-            g.fillRect(wall.x, wall.y, wall.width, wall.height);
-        }
-
-        drawCheese(g);
-        drawCat(g);
-        drawMouse(g);
-
-        if (gameOver) {
-            g.setColor(new Color(0, 0, 0, 185));
-            g.fillRect(0, 0, WIDTH, HEIGHT);
-
-            g.setColor(Color.WHITE);
-            g.setFont(new Font("Arial", Font.BOLD, 38));
-            g.drawString("Round Over!", 270, 250);
-
-            g.setFont(new Font("Arial", Font.PLAIN, 24));
-            g.drawString("Round Score: " + roundScore, 290, 300);
-            g.drawString("Round Mice Caught: " + roundMiceCaught, 250, 335);
-            g.drawString("Total Score: " + totalScore, 290, 370);
-            g.drawString("Total Mice Caught: " + totalMiceCaught, 245, 405);
-
-            g.drawString("Press R for next round", 245, 455);
-            g.drawString("Close window to quit", 265, 490);
-        }
+    private void drawCheese(Graphics g) {
+        g.setColor(Color.YELLOW);
+        g.fillOval(cheeseX, cheeseY, CHEESE_SIZE, CHEESE_SIZE);
+        g.setColor(Color.ORANGE);
+        g.drawOval(cheeseX, cheeseY, CHEESE_SIZE, CHEESE_SIZE);
     }
 
     private void drawStartMenu(Graphics g) {
-        g.setColor(new Color(245, 245, 245));
+        g.setColor(Color.WHITE);
         g.fillRect(0, 0, WIDTH, HEIGHT);
 
         g.setColor(Color.BLACK);
@@ -543,163 +556,83 @@ public class CatMouseGame extends JPanel {
         g.drawString("Press ENTER to Start", 275, 200);
 
         g.setFont(new Font("Arial", Font.PLAIN, 18));
-        g.drawString("Controls:", 350, 260);
-        g.drawString("WASD = Move", 320, 290);
-        g.drawString("1-4 = Change Skin", 300, 320);
-        g.drawString("M = Mute / Unmute", 300, 350);
-        g.drawString("+ or = = Volume Up", 300, 380);
-        g.drawString("- = Volume Down", 300, 410);
-        g.drawString("R = Next Round after Game Over", 300, 440);
-
-        g.drawString("Unlock Skins with Score:", 290, 500);
-        g.drawString("Black: 100   Gray: 300   White: 500", 245, 530);
-
-        g.drawString("Saved Total Score: " + totalScore, 300, 570);
+        g.drawString("Hold WASD = Move", 300, 290);
+        g.drawString("Saved Total Score: " + totalScore, 290, 350);
     }
 
-    private void moveMouse() {
-        int nextX = mouseX + mouseDX;
-        int nextY = mouseY + mouseDY;
+    @Override
+    public void keyPressed(KeyEvent e) {
+        int k = e.getKeyCode();
 
-        Rectangle nextMouseX = new Rectangle(nextX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
-        Rectangle nextMouseY = new Rectangle(mouseX, nextY, MOUSE_SIZE, MOUSE_SIZE);
-
-        boolean hitX = false;
-        boolean hitY = false;
-
-        for (Rectangle wall : walls) {
-            if (nextMouseX.intersects(wall)) hitX = true;
-            if (nextMouseY.intersects(wall)) hitY = true;
+        if (inStartMenu && k == KeyEvent.VK_ENTER) {
+            startNewRound(true);
+            inStartMenu = false;
+            repaint();
+            return;
         }
 
-        if (hitX) {
-            mouseDX *= -1;
-        } else {
-            mouseX += mouseDX;
+        if (k == KeyEvent.VK_W) moveUp = true;
+        if (k == KeyEvent.VK_S) moveDown = true;
+        if (k == KeyEvent.VK_A) moveLeft = true;
+        if (k == KeyEvent.VK_D) moveRight = true;
+
+        if (gameOver && k == KeyEvent.VK_R) {
+            startNewRound(false);
         }
 
-        if (hitY) {
-            mouseDY *= -1;
-        } else {
-            mouseY += mouseDY;
-        }
+        if (k == KeyEvent.VK_1) currentSkin = CatSkin.ORANGE;
+        if (k == KeyEvent.VK_2 && isSkinUnlocked(CatSkin.BLACK)) currentSkin = CatSkin.BLACK;
+        if (k == KeyEvent.VK_3 && isSkinUnlocked(CatSkin.GRAY)) currentSkin = CatSkin.GRAY;
+        if (k == KeyEvent.VK_4 && isSkinUnlocked(CatSkin.WHITE)) currentSkin = CatSkin.WHITE;
 
-        if (random.nextInt(100) < 3) {
-            int newDX = (random.nextBoolean() ? 1 : -1) * (3 + random.nextInt(3));
-            int newDY = (random.nextBoolean() ? 1 : -1) * (3 + random.nextInt(3));
+        if (k == KeyEvent.VK_M) muted = !muted;
+        if (k == KeyEvent.VK_EQUALS) increaseVolume();
+        if (k == KeyEvent.VK_MINUS) decreaseVolume();
 
-            Rectangle testRect = new Rectangle(mouseX + newDX, mouseY + newDY, MOUSE_SIZE, MOUSE_SIZE);
-            if (!collidesWithWall(testRect)) {
-                mouseDX = newDX;
-                mouseDY = newDY;
-            }
-        }
+        repaint();
     }
 
-    private void checkCatch() {
-        Rectangle catRect = new Rectangle(catX, catY, CAT_SIZE, CAT_SIZE);
-        Rectangle mouseRect = new Rectangle(mouseX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
+    @Override
+    public void keyReleased(KeyEvent e) {
+        int k = e.getKeyCode();
 
-        if (catRect.intersects(mouseRect)) {
-            roundMiceCaught++;
-            totalMiceCaught++;
-            roundScore += POINTS_PER_MOUSE;
-            totalScore += POINTS_PER_MOUSE;
-
-            playSound("sounds/meow.wav");
-            playSound("sounds/squeak.wav");
-
-            saveProgress();
-            respawnMouse();
-        }
+        if (k == KeyEvent.VK_W) moveUp = false;
+        if (k == KeyEvent.VK_S) moveDown = false;
+        if (k == KeyEvent.VK_A) moveLeft = false;
+        if (k == KeyEvent.VK_D) moveRight = false;
     }
 
-    private void checkCheesePickup() {
-        Rectangle catRect = new Rectangle(catX, catY, CAT_SIZE, CAT_SIZE);
-        Rectangle cheeseRect = new Rectangle(cheeseX, cheeseY, CHEESE_SIZE, CHEESE_SIZE);
-
-        if (catRect.intersects(cheeseRect)) {
-            roundCheeseCollected++;
-            totalCheeseCollected++;
-            roundScore += POINTS_PER_CHEESE;
-            totalScore += POINTS_PER_CHEESE;
-
-            playSound("sounds/cheese.wav");
-
-            saveProgress();
-            respawnCheese();
-        }
+    @Override
+    public void keyTyped(KeyEvent e) {
     }
 
-    private void respawnMouse() {
-        boolean valid = false;
-
-        while (!valid) {
-            mouseX = 40 + random.nextInt(WIDTH - 80 - MOUSE_SIZE);
-            mouseY = MAZE_TOP + 20 + random.nextInt(HEIGHT - MAZE_TOP - 60 - MOUSE_SIZE);
-
-            Rectangle mouseRect = new Rectangle(mouseX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
-            Rectangle catRect = new Rectangle(catX, catY, CAT_SIZE, CAT_SIZE);
-
-            valid = !collidesWithWall(mouseRect) && !mouseRect.intersects(catRect);
-        }
-
-        mouseDX = (random.nextBoolean() ? 1 : -1) * (3 + random.nextInt(3));
-        mouseDY = (random.nextBoolean() ? 1 : -1) * (3 + random.nextInt(3));
+    @Override
+    public void mouseClicked(MouseEvent e) {
+        requestFocus();
     }
 
-    private void respawnCheese() {
-        boolean valid = false;
-
-        while (!valid) {
-            cheeseX = 40 + random.nextInt(WIDTH - 80 - CHEESE_SIZE);
-            cheeseY = MAZE_TOP + 20 + random.nextInt(HEIGHT - MAZE_TOP - 60 - CHEESE_SIZE);
-
-            Rectangle cheeseRect = new Rectangle(cheeseX, cheeseY, CHEESE_SIZE, CHEESE_SIZE);
-            Rectangle catRect = new Rectangle(catX, catY, CAT_SIZE, CAT_SIZE);
-            Rectangle mouseRect = new Rectangle(mouseX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
-
-            valid = !collidesWithWall(cheeseRect)
-                    && !cheeseRect.intersects(catRect)
-                    && !cheeseRect.intersects(mouseRect);
-        }
+    @Override
+    public void mousePressed(MouseEvent e) {
+        requestFocus();
     }
 
-    private boolean collidesWithWall(Rectangle rect) {
-        for (Rectangle wall : walls) {
-            if (rect.intersects(wall)) return true;
-        }
-        return false;
+    @Override
+    public void mouseReleased(MouseEvent e) {
     }
 
-    private void updateTimer() {
-        long currentTime = System.currentTimeMillis();
-        if (currentTime - lastSecondTime >= 1000) {
-            timeLeft--;
-            lastSecondTime = currentTime;
+    @Override
+    public void mouseEntered(MouseEvent e) {
+    }
 
-            if (timeLeft <= 0) {
-                gameOver = true;
-                clearMovement();
-                saveProgress();
-            }
-        }
+    @Override
+    public void mouseExited(MouseEvent e) {
     }
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            JFrame frame = new JFrame("Cat Mouse Game");
             CatMouseGame game = new CatMouseGame();
-
-            frame.setContentPane(game);
-            frame.pack();
-            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            frame.setLocationRelativeTo(null);
-            frame.setResizable(false);
-
-            game.setupWindowKeyBindings(frame.getRootPane());
-
-            frame.setVisible(true);
+            game.toFront();
+            game.requestFocus();
         });
     }
 }
