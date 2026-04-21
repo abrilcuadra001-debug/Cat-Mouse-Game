@@ -1,12 +1,12 @@
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.*;
+import java.awt.event.ActionEvent;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.Random;
 import javax.sound.sampled.*;
 
-public class CatMouseGame extends JPanel implements ActionListener, KeyListener {
+public class CatMouseGame extends JPanel {
 
     enum CatSkin {
         ORANGE, BLACK, GRAY, WHITE
@@ -64,7 +64,7 @@ public class CatMouseGame extends JPanel implements ActionListener, KeyListener 
     private final String SAVE_FILE = "saveData.txt";
 
     // Sound settings
-    private float volume = 0.8f; // 0.0 to 1.0
+    private float volume = 0.8f;
     private boolean muted = false;
 
     // Maze walls
@@ -74,14 +74,117 @@ public class CatMouseGame extends JPanel implements ActionListener, KeyListener 
         setPreferredSize(new Dimension(WIDTH, HEIGHT));
         setBackground(Color.WHITE);
         setFocusable(true);
-        addKeyListener(this);
 
         createMazeWalls();
         loadProgress();
         startNewRound(true);
+        setupKeyBindings();
 
-        timer = new Timer(30, this);
+        timer = new Timer(30, e -> {
+            if (!gameOver) {
+                moveMouse();
+                checkCatch();
+                checkCheesePickup();
+                updateTimer();
+            }
+            repaint();
+        });
         timer.start();
+    }
+
+    private void setupKeyBindings() {
+        InputMap im = getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        ActionMap am = getActionMap();
+
+        bindKey(im, am, "LEFT", "moveLeft", () -> moveCat(-CAT_SPEED, 0));
+        bindKey(im, am, "RIGHT", "moveRight", () -> moveCat(CAT_SPEED, 0));
+        bindKey(im, am, "UP", "moveUp", () -> moveCat(0, -CAT_SPEED));
+        bindKey(im, am, "DOWN", "moveDown", () -> moveCat(0, CAT_SPEED));
+
+        bindKey(im, am, "R", "nextRound", () -> {
+            if (gameOver) {
+                startNewRound(false);
+                repaint();
+            }
+        });
+
+        bindKey(im, am, "1", "skin1", () -> {
+            currentSkin = CatSkin.ORANGE;
+            saveProgress();
+            repaint();
+        });
+
+        bindKey(im, am, "2", "skin2", () -> {
+            if (isSkinUnlocked(CatSkin.BLACK)) {
+                currentSkin = CatSkin.BLACK;
+                saveProgress();
+                repaint();
+            }
+        });
+
+        bindKey(im, am, "3", "skin3", () -> {
+            if (isSkinUnlocked(CatSkin.GRAY)) {
+                currentSkin = CatSkin.GRAY;
+                saveProgress();
+                repaint();
+            }
+        });
+
+        bindKey(im, am, "4", "skin4", () -> {
+            if (isSkinUnlocked(CatSkin.WHITE)) {
+                currentSkin = CatSkin.WHITE;
+                saveProgress();
+                repaint();
+            }
+        });
+
+        bindKey(im, am, "M", "mute", () -> {
+            muted = !muted;
+            saveProgress();
+            repaint();
+        });
+
+        bindKey(im, am, "EQUALS", "volUpEquals", () -> {
+            increaseVolume();
+            repaint();
+        });
+
+        bindKey(im, am, "PLUS", "volUpPlus", () -> {
+            increaseVolume();
+            repaint();
+        });
+
+        bindKey(im, am, "MINUS", "volDown", () -> {
+            decreaseVolume();
+            repaint();
+        });
+    }
+
+    private void bindKey(InputMap im, ActionMap am, String keyStroke, String actionName, Runnable action) {
+        im.put(KeyStroke.getKeyStroke(keyStroke), actionName);
+        am.put(actionName, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                action.run();
+            }
+        });
+    }
+
+    private void moveCat(int dx, int dy) {
+        if (gameOver) {
+            return;
+        }
+
+        int nextX = catX + dx;
+        int nextY = catY + dy;
+
+        Rectangle nextCat = new Rectangle(nextX, nextY, CAT_SIZE, CAT_SIZE);
+        if (!collidesWithWall(nextCat)) {
+            catX = nextX;
+            catY = nextY;
+        }
+
+        repaint();
     }
 
     private void createMazeWalls() {
@@ -161,10 +264,7 @@ public class CatMouseGame extends JPanel implements ActionListener, KeyListener 
     }
 
     private String getSkinStatus(CatSkin skin, int unlockScore) {
-        if (isSkinUnlocked(skin)) {
-            return "Unlocked";
-        }
-        return "Locked (" + unlockScore + ")";
+        return isSkinUnlocked(skin) ? "Unlocked" : "Locked (" + unlockScore + ")";
     }
 
     private void drawCat(Graphics g) {
@@ -185,7 +285,6 @@ public class CatMouseGame extends JPanel implements ActionListener, KeyListener 
 
         g.fillOval(catX, catY, CAT_SIZE, CAT_SIZE);
 
-        // Ears
         g.fillPolygon(
                 new int[]{catX + 5, catX + 12, catX + 9},
                 new int[]{catY + 8, catY - 8, catY + 8},
@@ -197,11 +296,9 @@ public class CatMouseGame extends JPanel implements ActionListener, KeyListener 
                 3
         );
 
-        // Outline so white cat is visible
         g.setColor(Color.BLACK);
         g.drawOval(catX, catY, CAT_SIZE, CAT_SIZE);
 
-        // Eyes
         g.setColor(Color.GREEN);
         g.fillOval(catX + 8, catY + 12, 6, 6);
         g.fillOval(catX + 20, catY + 12, 6, 6);
@@ -239,11 +336,7 @@ public class CatMouseGame extends JPanel implements ActionListener, KeyListener 
             if (savedSkin != null) {
                 try {
                     CatSkin loadedSkin = CatSkin.valueOf(savedSkin);
-                    if (isSkinUnlocked(loadedSkin)) {
-                        currentSkin = loadedSkin;
-                    } else {
-                        currentSkin = CatSkin.ORANGE;
-                    }
+                    currentSkin = isSkinUnlocked(loadedSkin) ? loadedSkin : CatSkin.ORANGE;
                 } catch (IllegalArgumentException e) {
                     currentSkin = CatSkin.ORANGE;
                 }
@@ -285,13 +378,7 @@ public class CatMouseGame extends JPanel implements ActionListener, KeyListener 
                 float min = gainControl.getMinimum();
                 float max = gainControl.getMaximum();
 
-                float gain;
-                if (volume <= 0.0f) {
-                    gain = min;
-                } else {
-                    gain = min + (max - min) * volume;
-                }
-
+                float gain = (volume <= 0.0f) ? min : min + (max - min) * volume;
                 gainControl.setValue(gain);
             }
 
@@ -319,10 +406,7 @@ public class CatMouseGame extends JPanel implements ActionListener, KeyListener 
     }
 
     private String getVolumeText() {
-        if (muted) {
-            return "Muted";
-        }
-        return (int) (volume * 100) + "%";
+        return muted ? "Muted" : (int) (volume * 100) + "%";
     }
 
     @Override
@@ -352,13 +436,11 @@ public class CatMouseGame extends JPanel implements ActionListener, KeyListener 
         g.drawString("3 Gray: " + getSkinStatus(CatSkin.GRAY, GRAY_UNLOCK_SCORE), 390, 96);
         g.drawString("4 White: " + getSkinStatus(CatSkin.WHITE, WHITE_UNLOCK_SCORE), 570, 118);
 
-        // Draw maze walls
         g.setColor(new Color(90, 60, 35));
         for (Rectangle wall : walls) {
             g.fillRect(wall.x, wall.y, wall.width, wall.height);
         }
 
-        // Draw cheese
         g.setColor(Color.YELLOW);
         g.fillOval(cheeseX, cheeseY, CHEESE_SIZE, CHEESE_SIZE);
 
@@ -367,10 +449,8 @@ public class CatMouseGame extends JPanel implements ActionListener, KeyListener 
         g.fillOval(cheeseX + 11, cheeseY + 6, 5, 5);
         g.fillOval(cheeseX + 7, cheeseY + 12, 4, 4);
 
-        // Draw cat
         drawCat(g);
 
-        // Draw mouse
         g.setColor(Color.GRAY);
         g.fillOval(mouseX, mouseY, MOUSE_SIZE, MOUSE_SIZE);
         g.setColor(Color.BLACK);
@@ -393,17 +473,6 @@ public class CatMouseGame extends JPanel implements ActionListener, KeyListener 
             g.drawString("Press R for next round", 255, 420);
             g.drawString("Close window to quit", 275, 455);
         }
-    }
-
-    @Override
-    public void actionPerformed(ActionEvent e) {
-        if (!gameOver) {
-            moveMouse();
-            checkCatch();
-            checkCheesePickup();
-            updateTimer();
-        }
-        repaint();
     }
 
     private void moveMouse() {
@@ -542,83 +611,19 @@ public class CatMouseGame extends JPanel implements ActionListener, KeyListener 
         }
     }
 
-    @Override
-    public void keyPressed(KeyEvent e) {
-        int key = e.getKeyCode();
-
-        // Sound controls
-        if (key == KeyEvent.VK_M) {
-            muted = !muted;
-            saveProgress();
-        } else if (key == KeyEvent.VK_EQUALS || key == KeyEvent.VK_PLUS) {
-            increaseVolume();
-        } else if (key == KeyEvent.VK_MINUS) {
-            decreaseVolume();
-        }
-
-        // Skin switching
-        if (key == KeyEvent.VK_1) {
-            currentSkin = CatSkin.ORANGE;
-            saveProgress();
-        } else if (key == KeyEvent.VK_2) {
-            if (isSkinUnlocked(CatSkin.BLACK)) {
-                currentSkin = CatSkin.BLACK;
-                saveProgress();
-            }
-        } else if (key == KeyEvent.VK_3) {
-            if (isSkinUnlocked(CatSkin.GRAY)) {
-                currentSkin = CatSkin.GRAY;
-                saveProgress();
-            }
-        } else if (key == KeyEvent.VK_4) {
-            if (isSkinUnlocked(CatSkin.WHITE)) {
-                currentSkin = CatSkin.WHITE;
-                saveProgress();
-            }
-        }
-
-        if (!gameOver) {
-            int nextX = catX;
-            int nextY = catY;
-
-            if (key == KeyEvent.VK_LEFT) {
-                nextX -= CAT_SPEED;
-            } else if (key == KeyEvent.VK_RIGHT) {
-                nextX += CAT_SPEED;
-            } else if (key == KeyEvent.VK_UP) {
-                nextY -= CAT_SPEED;
-            } else if (key == KeyEvent.VK_DOWN) {
-                nextY += CAT_SPEED;
-            }
-
-            Rectangle nextCat = new Rectangle(nextX, nextY, CAT_SIZE, CAT_SIZE);
-
-            if (!collidesWithWall(nextCat)) {
-                catX = nextX;
-                catY = nextY;
-            }
-        } else if (key == KeyEvent.VK_R) {
-            startNewRound(false);
-        }
-
-        repaint();
-    }
-
-    @Override
-    public void keyReleased(KeyEvent e) { }
-
-    @Override
-    public void keyTyped(KeyEvent e) { }
-
     public static void main(String[] args) {
-        JFrame frame = new JFrame("Cat Mouse Game");
-        CatMouseGame game = new CatMouseGame();
+        SwingUtilities.invokeLater(() -> {
+            JFrame frame = new JFrame("Cat Mouse Game");
+            CatMouseGame game = new CatMouseGame();
 
-        frame.add(game);
-        frame.pack();
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setLocationRelativeTo(null);
-        frame.setResizable(false);
-        frame.setVisible(true);
+            frame.add(game);
+            frame.pack();
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.setLocationRelativeTo(null);
+            frame.setResizable(false);
+            frame.setVisible(true);
+
+            game.requestFocusInWindow();
+        });
     }
 }
